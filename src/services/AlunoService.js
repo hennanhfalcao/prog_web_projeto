@@ -1,6 +1,7 @@
 const prisma = require("../databases/prisma");
 const AlunoInvalidoError = require("../errors/AlunoInvalidoError");
 const AlunoNaoEncontradoError = require("../errors/AlunoNaoEncontradoError");
+const EmailDuplicadoError = require("../errors/EmailDuplicadoError");
 
 class AlunoService{
 
@@ -29,6 +30,34 @@ class AlunoService{
         }
 
         return aluno;
+    }
+
+    async update(id, dados){
+        const { nome, email } = dados;
+
+        // Reaproveita AlunoInvalidoError,
+        // só muda o texto pra se adequar ao contexto.
+        if(!nome && !email){
+            throw new AlunoInvalidoError("Informe nome e/ou email para atualizar o aluno");
+        }
+
+        // Garante que o aluno existe antes de tentar atualizar,
+        //  caso não exista, lança AlunoNaoEncontradoError.
+        await this.findUnique(id);
+
+        try{
+            const aluno = await prisma.aluno.update({
+                where: { id: Number(id) },
+                data: { nome, email }
+            });
+            return aluno;
+        }catch(error){
+            // P2002 = violação de constraint @unique quando um email já é usado por outro aluno
+            if(error.code === "P2002"){
+                throw new EmailDuplicadoError();
+            }
+            throw error;
+        }
     }
 
     async create(aluno){
